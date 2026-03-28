@@ -77,8 +77,9 @@ new class extends Component
             ->orderBy('type')
             ->orderByDesc('is_official')
             ->orderBy('sort_order')
-            ->distinct('url')
             ->get()
+            ->unique('url')
+            ->values()
             ->groupBy([
                 'type',
                 fn ($item) => $item->is_official ? 'official' : 'unofficial',
