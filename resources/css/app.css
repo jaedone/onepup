@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
+@source "../../storage/framework/views/*.php";
+@source "../**/*.blade.php";
+@source "../**/*.js";
+
+:root {
+    --maroon: #800000;
+    --yellow: #FFDF00;
+    --gold: #DAA520;
+    --white: #FFFFFF;
+    --black: #000000;
+}
+
+body {
+    font-family: "Assistant", sans-serif;
+}
+
+.font-display,
+h1, h2, h3, h4 {
+    font-family: "Arimo", sans-serif;
+}
+
+html {
+scroll-behavior: smooth;
+}
