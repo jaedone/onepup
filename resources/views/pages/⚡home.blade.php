@@ -294,7 +294,7 @@ No results found
 
 @endif
 
-<section id="suggest" class="scroll-mt-28 bg-neutral-100 px-6 py-1">
+<section id="suggest" class="scroll-mt-28 bg-neutral-100 px-6 py-10">
 
     <div class="mx-auto max-w-3xl rounded-[32px] border border-neutral-200 bg-white p-8 text-black shadow-xl">
 
