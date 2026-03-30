@@ -6,8 +6,6 @@ use Livewire\Component;
 
 new class extends Component
 {
-    public string $search = '';
-
     public string $message = '';
     public bool $wants_notification = false;
     public string $email = '';
@@ -33,6 +31,8 @@ new class extends Component
     protected function messages(): array
     {
         return [
+            'message.min' => 'Please write more than 4 characters before submitting.',
+            'message.required' => 'This field cannot be empty.',
             'email.required' => 'Please enter your email if you want to be notified.',
             'email.email' => 'Please enter a valid email address, like name@example.com.',
         ];
@@ -53,20 +53,11 @@ new class extends Component
         session()->flash('success', 'Thank you! Your suggestion has been submitted.');
     }
 
-    public function getSearchResultsProperty()
+    public function getSearchableLinksProperty()
     {
-        if (trim($this->search) === '') {
-            return collect();
-        }
-
-        return Link::query()
-            ->where('is_active', true)
-            ->where(function ($query) {
-                $query->where('title', 'like', '%' . $this->search . '%')
-                      ->orWhere('description', 'like', '%' . $this->search . '%');
-            })
+        return Link::where('is_active', true)
+            ->select(['id', 'title', 'description', 'url', 'type', 'is_official', 'sort_order'])
             ->orderBy('sort_order')
-            ->limit(50)
             ->get();
     }
 
@@ -76,7 +67,7 @@ new class extends Component
             ->where('is_active', true)
             ->orderBy('type')
             ->orderByDesc('is_official')
-            ->orderBy('sort_order')
+            ->orderBy('title')
             ->get()
             ->unique('url')
             ->values()
@@ -92,6 +83,47 @@ new class extends Component
     x-data="{
         showStickySearch: false,
         activeSection: 'home',
+        search: '',
+        allLinks: {{ Js::from($this->searchableLinks) }},
+        showDropdown: false,
+        highlightedIndex: -1,
+
+        get results() {
+            if (this.search.trim() === '') return [];
+            const q = this.search.toLowerCase();
+            return this.allLinks.filter(link =>
+                link.title?.toLowerCase().includes(q) ||
+                link.description?.toLowerCase().includes(q) ||
+                link.type?.toLowerCase() === q
+            );
+        },
+
+        get suggestions() {
+            if (this.search.trim().length < 2) return [];
+            const q = this.search.toLowerCase();
+            return this.allLinks
+                .filter(link =>
+                    link.title?.toLowerCase().includes(q) ||
+                    link.description?.toLowerCase().includes(q)
+                )
+                .slice(0, 6); // limit to 6 suggestions
+        },
+
+
+        get groupedResults() {
+            const order = ['file', 'website', 'facebook_page', 'community', 'subreddit'];
+            return order
+                .map(type => ({
+                    type,
+                    label: { file:'Files', website:'Websites', facebook_page:'Facebook Pages', community:'Communities', subreddit:'Subreddits' }[type],
+                    items: this.results.filter(l => l.type === type)
+                }))
+                .filter(g => g.items.length > 0);
+        },
+
+        typeLabel(type) {
+            return { file:'File', website:'Website', facebook_page:'Page', community:'Community', subreddit:'Subreddit' }[type] ?? type;
+        },
 
         setActive(section) {
             this.activeSection = section;
@@ -130,7 +162,7 @@ new class extends Component
 <header class="fixed top-4 left-1/2 z-50 -translate-x-1/2">
     <div class="flex items-center gap-4 rounded-full border border-white/20 bg-[#800000]/100 px-6 py-3 text-white shadow-2xl backdrop-blur-2xl">
 
-        <a href="#home" class="font-bold">ONE PUP</a>
+        <a href="#home" class="font-bold whitespace-nowrap">ONE PUP</a>
 
         <nav class="hidden md:flex gap-4 text-sm">
             <a href="#home" wire:click="$set('search','')" @click="setActive('home')" :class="activeSection === 'home' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Home</a>
@@ -143,13 +175,51 @@ new class extends Component
              <a href="#about" @click="setActive('about')" wire:click="$set('search','')" :class="activeSection === 'about' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">About</a>
         </nav>
 
-        <div x-show="showStickySearch" x-transition>
+        <div x-show="showStickySearch" x-transition class="relative">
             <input
                 type="text"
-                wire:model.live.debounce.300ms="search"
+                x-model="search"
+                @input="showDropdown = true; highlightedIndex = -1"
+                @focus="showDropdown = true"
+                @blur="setTimeout(() => showDropdown = false, 150)"
+                @keydown.arrow-down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1)"
+                @keydown.arrow-up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, -1)"
+                @keydown.enter.prevent="
+                    if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+                        search = suggestions[highlightedIndex].title;
+                        showDropdown = false;
+                    }
+                "
+                @keydown.escape="showDropdown = false"
                 placeholder="Looking for something?"
-                class="ml-4 rounded-full bg-white/90 px-4 py-1 text-sm text-black outline-none"
+                class="ml-4 rounded-full bg-white/90 px-4 py-2 text-sm text-black outline-none w-72"
             >
+
+            <div
+                x-show="showDropdown && suggestions.length > 0"
+                x-cloak
+                class="absolute left-4 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-y-auto max-h-72 z-50 w-96"
+            >
+                <template x-for="(suggestion, index) in suggestions" :key="suggestion.id">
+                    <div
+                        @mousedown.prevent="search = suggestion.title; showDropdown = false"
+                        :class="highlightedIndex === index ? 'bg-[#800000] text-white' : 'hover:bg-neutral-100 text-black'"
+                        class="flex items-center justify-between px-5 py-3 cursor-pointer transition"
+                    >
+                        <div class="flex items-center gap-3 min-w-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+                            </svg>
+                            <span class="truncate font-medium" x-text="suggestion.title"></span>
+                        </div>
+                        <span
+                            :class="highlightedIndex === index ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'"
+                            class="text-xs px-2 py-1 rounded ml-3 shrink-0"
+                            x-text="{ file:'File', website:'Website', facebook_page:'Page', community:'Community', subreddit:'Subreddit' }[suggestion.type] ?? suggestion.type"
+                        ></span>
+                    </div>
+                </template>
+            </div>
         </div>
 
     </div>
@@ -173,14 +243,52 @@ A centralized website where every essential PUP link is accessible in one place.
 
 <div class="mx-auto max-w-3xl">
 
-<div class="mx-auto max-w-3xl">
+<div class="mx-auto max-w-3xl relative">
     <div class="rounded-full bg-white/85 p-2 shadow-2xl backdrop-blur-xl">
         <input
             type="text"
-            wire:model.live.debounce.300ms="search"
+            x-model="search"
+            @input="showDropdown = true; highlightedIndex = -1"
+            @focus="showDropdown = true"
+            @blur="setTimeout(() => showDropdown = false, 150)"
+            @keydown.arrow-down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1)"
+            @keydown.arrow-up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, -1)"
+            @keydown.enter.prevent="
+                if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+                    search = suggestions[highlightedIndex].title;
+                    showDropdown = false;
+                }
+            "
+            @keydown.escape="showDropdown = false"
             placeholder="Looking for something?"
             class="w-full rounded-full bg-transparent px-6 py-2 text-lg text-black outline-none"
         >
+    </div>
+
+    <div
+        x-show="showDropdown && suggestions.length > 0"
+        x-cloak
+        class="absolute left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-y-auto max-h-72 z-50"
+    >
+        <template x-for="(suggestion, index) in suggestions" :key="suggestion.id">
+            <div
+                @mousedown.prevent="search = suggestion.title; showDropdown = false"
+                :class="highlightedIndex === index ? 'bg-[#800000] text-white' : 'hover:bg-neutral-100 text-black'"
+                class="flex items-center justify-between px-5 py-3 cursor-pointer transition"
+            >
+                <div class="flex items-center gap-3 min-w-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+                    </svg>
+                    <span class="truncate font-medium" x-text="suggestion.title"></span>
+                </div>
+                <span
+                    :class="highlightedIndex === index ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'"
+                    class="text-xs px-2 py-1 rounded ml-3 shrink-0"
+                    x-text="{ file:'File', website:'Website', facebook_page:'Page', community:'Community', subreddit:'Subreddit' }[suggestion.type] ?? suggestion.type"
+                ></span>
+            </div>
+        </template>
     </div>
 </div>
 
@@ -195,73 +303,132 @@ Suggestions, errors, or missing links?
 
 </section>
 
-@if($search !== '')
+<div x-show="search.trim() !== ''" x-cloak>
+    <section class="scroll-mt-28 mx-auto max-w-7xl px-6 py-1">
 
-<section class="scroll-mt-28 mx-auto max-w-7xl px-6 py-1">
+        <h2 class="text-center text-4xl font-display font-black text-[#800000] mb-6">
+            Search Results
+        </h2>
 
-<h2 class="text-center text-4xl font-display font-black text-[#800000] mb-1">
-Search Results
-</h2>
+        {{-- No results --}}
+        <div x-show="results.length === 0" class="text-center py-12">
+            <img src="/images/no-results.gif" class="mx-auto w-72 mb-6">
+            <p class="text-xl text-gray-600 font-semibold">No results found</p>
+        </div>
 
-@if($this->searchResults->count())
+        {{-- Results: render ALL cards up front, hide non-matching ones via Alpine --}}
+        <div x-show="results.length > 0">
+            @foreach(['file' => 'Files', 'website' => 'Websites', 'facebook_page' => 'Facebook Pages', 'community' => 'Communities', 'subreddit' => 'Subreddits'] as $type => $label)
+                @php
+                    $typeLinks = $this->searchableLinks->where('type', $type);
+                    $official = $typeLinks->where('is_official', true)->values();
+                    $unofficial = $typeLinks->where('is_official', false)->values();
+                @endphp
 
-<div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-
-@foreach($this->searchResults as $link)
-                <a
-                    href="{{ $link->url }}"
-                    target="_blank"
-                    class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl
-                    {{ $link->is_official
-                        ? 'border-[#800000]/40 hover:border-[#800000] hover:bg-[#800000]'
-                        : 'border-[#DAA520]/60 hover:border-[#DAA520] hover:bg-[#DAA520]'
-                    }}"
+                <div
+                    x-show="results.some(r => r.type === '{{ $type }}')"
+                    class="mb-10"
                 >
-                    <div class="mb-2 flex items-start justify-between gap-3">
-                        <div class="flex items-center gap-2">
-                            <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words [word-break:break-word]">
-                                {{ $link->title }}
-                            </h4>
+                    <h2 class="mb-8 text-center font-display text-4xl font-black text-[#800000]">
+                        {{ $label }}
+                    </h2>
+
+                    {{-- Official group --}}
+                    @if($official->count())
+                        <div x-show="results.some(r => r.type === '{{ $type }}' && r.is_official)">
+                            <div class="mb-12">
+                                <div class="mb-6 flex items-center gap-4">
+                                    <div class="h-px flex-1 bg-[#800000]/30"></div>
+                                    <h3 class="font-display text-2xl font-bold text-[#800000]">Official {{ $label }}</h3>
+                                    <div class="h-px flex-1 bg-[#800000]/30"></div>
+                                </div>
+                                <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                                    @foreach($official as $link)
+                                        <div x-show="results.some(r => r.id === {{ $link->id }})" class="contents">
+                                            <a
+                                                href="{{ $link->url }}"
+                                                target="_blank"
+                                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl border-[#800000]/40 hover:border-[#800000] hover:bg-[#800000]"
+                                            >
+                                                <div class="mb-2 flex items-start justify-between gap-3">
+                                                    <div class="flex items-center gap-2">
+                                                        <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words [word-break:break-word]">
+                                                            {{ $link->title }}
+                                                        </h4>
+                                                    </div>
+                                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">
+                                                        {{ match($link->type) {
+                                                            'file' => 'File',
+                                                            'website' => 'Website',
+                                                            'facebook_page' => 'Page',
+                                                            'community' => 'Community',
+                                                            'subreddit' => 'Subreddit'
+                                                        } }}
+                                                    </span>
+                                                </div>
+                                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90">
+                                                    {{ $link->description }}
+                                                </p>
+                                            </a>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
                         </div>
+                    @endif
 
-                        <span class="text-xs px-2 py-1 rounded bg-gray-200">
+                    {{-- Unofficial group --}}
+                    @if($unofficial->count())
+                        <div x-show="results.some(r => r.type === '{{ $type }}' && !r.is_official)">
+                            <div class="mb-12">
+                                <div class="mb-6 flex items-center gap-4">
+                                    <div class="h-px flex-1 bg-[#DAA520]/30"></div>
+                                    <h3 class="font-display text-2xl font-bold text-[#800000]">Unofficial {{ $label }}</h3>
+                                    <div class="h-px flex-1 bg-[#DAA520]/30"></div>
+                                </div>
+                                <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                                    @foreach($unofficial as $link)
+                                        <div x-show="results.some(r => r.id === {{ $link->id }})" class="contents">
+                                            <a
+                                                href="{{ $link->url }}"
+                                                target="_blank"
+                                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl border-[#DAA520]/60 hover:border-[#DAA520] hover:bg-[#DAA520]"
+                                            >
+                                                <div class="mb-2 flex items-start justify-between gap-3">
+                                                    <div class="flex items-center gap-2">
+                                                        <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words [word-break:break-word]">
+                                                            {{ $link->title }}
+                                                        </h4>
+                                                    </div>
+                                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">
+                                                        {{ match($link->type) {
+                                                            'file' => 'File',
+                                                            'website' => 'Website',
+                                                            'facebook_page' => 'Page',
+                                                            'community' => 'Community',
+                                                            'subreddit' => 'Subreddit'
+                                                        } }}
+                                                    </span>
+                                                </div>
+                                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90">
+                                                    {{ $link->description }}
+                                                </p>
+                                            </a>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    @endif
 
-                        {{ match($link->type) {
-                        'file' => 'File',
-                        'website' => 'Website',
-                        'facebook_page' => 'Page',
-                        'community' => 'Community',
-                        'subreddit' => 'Subreddit'
-                        } }}
-                    </div>
+                </div>
+            @endforeach
+        </div>
 
-                    <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90">
-                        {{ $link->description }}
-                    </p>
-                </a>
-@endforeach
-
+    </section>
 </div>
 
-@else
-
-<div class="text-center py-12">
-
-<img src="/images/no-results.gif" class="mx-auto w-72 mb-6">
-
-<p class="text-xl text-gray-600 font-semibold">
-No results found
-</p>
-
-</div>
-
-@endif
-
-</section>
-
-@endif
-
-@if($search === '')
+<div x-show="search.trim() === ''" x-cloak>
 
 @include('partials.section',[
 'id'=>'files',
@@ -293,7 +460,7 @@ No results found
 'groups'=>$this->groupedLinks['subreddit'] ?? []
 ])
 
-@endif
+</div>
 
 <section id="suggest" class="scroll-mt-28 bg-neutral-100 px-6 py-10">
 
@@ -321,7 +488,7 @@ No results found
                 </label>
 
                 <textarea
-                    wire:model="message"
+                    wire:model.live.debounce.600ms="message"
                     rows="1"
                     x-data
                     x-init="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
@@ -395,7 +562,7 @@ About
     
     <!-- Facebook -->
     <a href="https://www.facebook.com/mak.jowsep" target="_blank" class="text-[#800000] hover:text-[#DAA520] transition">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-11 w-11" fill="currentColor" viewBox="0 0 24 24">
             <path d="M22 12a10 10 0 10-11.5 9.9v-7h-2.3v-2.9h2.3V9.4c0-2.3 1.4-3.6 3.5-3.6 1 0 2 .2 2 .2v2.2h-1.1c-1.1 0-1.5.7-1.5 1.4v1.7h2.6l-.4 2.9h-2.2v7A10 10 0 0022 12z"/>
         </svg>
     </a>
@@ -415,7 +582,7 @@ About
     </a>
 
     <!-- Gmail -->
-    <a href="mailto:neypesmarkjosephb@gmail.com" class="text-[#800000] hover:text-[#DAA520] transition">
+    <a href="https://mail.google.com/mail/?view=cm&to=neypesmarkjosephb@gmail.com" target="_blank" class="text-[#800000] hover:text-[#DAA520] transition">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 13.5L0 6.75V18h24V6.75L12 13.5zm12-9H0l12 7.5L24 4.5z"/>
         </svg>

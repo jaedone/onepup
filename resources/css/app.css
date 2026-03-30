@@ -25,3 +25,5 @@ h1, h2, h3, h4 {
 html {
 scroll-behavior: smooth;
 }
+
+[x-cloak] { display: none !important; }
