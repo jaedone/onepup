@@ -165,14 +165,14 @@ new class extends Component
         <a href="#home" class="font-bold whitespace-nowrap">ONE PUP</a>
 
         <nav class="hidden md:flex gap-4 text-sm">
-            <a href="#home" wire:click="$set('search','')" @click="setActive('home')" :class="activeSection === 'home' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Home</a>
-            <a href="#files" @click="setActive('files')" wire:click="$set('search','')" :class="activeSection === 'files' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Files</a>
-            <a href="#websites" @click="setActive('websites')" wire:click="$set('search','')" :class="activeSection === 'websites' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Websites</a>
-            <a href="#facebook-pages" @click="setActive('facebook-pages')" wire:click="$set('search','')" :class="activeSection === 'facebook-pages' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Pages</a>
-            <a href="#communities" @click="setActive('communities')" wire:click="$set('search','')" :class="activeSection === 'communities' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Communities</a>
-             <a href="#subreddits" @click="setActive('subreddits')" wire:click="$set('search','')" :class="activeSection === 'subreddits' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Subreddits</a>
-             <a href="#suggest" @click="setActive('suggest')" wire:click="$set('search','')" :class="activeSection === 'suggest' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Contribute</a>
-             <a href="#about" @click="setActive('about')" wire:click="$set('search','')" :class="activeSection === 'about' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">About</a>
+            <a href="#home" @click="setActive('home'); search = ''" :class="activeSection === 'home' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Home</a>
+            <a href="#files" @click="setActive('files'); search = ''" :class="activeSection === 'files' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Files</a>
+            <a href="#websites" @click="setActive('websites'); search = ''" :class="activeSection === 'websites' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Websites</a>
+            <a href="#facebook-pages" @click="setActive('facebook-pages'); search = ''" :class="activeSection === 'facebook-pages' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Pages</a>
+            <a href="#communities" @click="setActive('communities'); search = ''" :class="activeSection === 'communities' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Communities</a>
+             <a href="#subreddits" @click="setActive('subreddits'); search = ''" :class="activeSection === 'subreddits' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Subreddits</a>
+             <a href="#suggest" @click="setActive('suggest'); search = ''" :class="activeSection === 'suggest' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Contribute</a>
+             <a href="#about" @click="setActive('about'); search = ''" :class="activeSection === 'about' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">About</a>
         </nav>
 
         <div x-show="showStickySearch" x-transition class="relative">
