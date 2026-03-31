@@ -56,8 +56,8 @@ new class extends Component
     public function getSearchableLinksProperty()
     {
         return Link::where('is_active', true)
-            ->select(['id', 'title', 'description', 'url', 'type', 'is_official', 'sort_order'])
-            ->orderBy('sort_order')
+            ->select(['id', 'title', 'description', 'url', 'type', 'is_official', 'category'])
+            ->orderBy('title')
             ->get();
     }
 
@@ -65,17 +65,26 @@ new class extends Component
     {
         return Link::query()
             ->where('is_active', true)
-            ->orderBy('type')
-            ->orderByDesc('is_official')
             ->orderBy('title')
             ->get()
             ->unique('url')
             ->values()
-            ->groupBy([
-                'type',
-                fn ($item) => $item->is_official ? 'official' : 'unofficial',
-            ]);
+            ->groupBy(['type', 'category']);
     }
+    // public function getLinkStatsProperty()
+    // {
+    //     return Link::where('is_active', true)
+    //         ->selectRaw("
+    //             COUNT(*) as total,
+    //             SUM(CASE WHEN type = 'file' THEN 1 ELSE 0 END) as files,
+    //             SUM(CASE WHEN type = 'website' THEN 1 ELSE 0 END) as websites,
+    //             SUM(CASE WHEN type = 'facebook_page' THEN 1 ELSE 0 END) as pages,
+    //             SUM(CASE WHEN type = 'community' THEN 1 ELSE 0 END) as communities,
+    //             SUM(CASE WHEN type = 'subreddit' THEN 1 ELSE 0 END) as subreddits
+    //         ")
+    //         ->first();
+    // }
+
 };
 ?>
 
@@ -87,28 +96,110 @@ new class extends Component
         allLinks: {{ Js::from($this->searchableLinks) }},
         showDropdown: false,
         highlightedIndex: -1,
+        searchTimeout: null,
+        rawSearch: '',
+
+        categoryKeywords: {
+            'org_cadbe': ['organization', 'organizations', 'cadbe', 'architecture', 'design', 'built environment', 'interior design', 'environmental planning'],
+            'org_caf':   ['organization', 'organizations', 'caf', 'accountancy', 'finance', 'accounting', 'management accounting'],
+            'org_cba':   ['organization', 'organizations', 'cba', 'business administration', 'marketing', 'entrepreneurship', 'real estate', 'cooperative', 'office administration', 'hrm'],
+            'org_ccis':  ['organization', 'organizations', 'ccis', 'computer science', 'information technology', 'it', 'cs'],
+            'org_ce':    ['organization', 'organizations', 'ce', 'engineering', 'civil', 'mechanical', 'electrical', 'electronics', 'industrial', 'computer engineering', 'railway'],
+            'org_coc':   ['organization', 'organizations', 'coc', 'communication', 'broadcasting', 'journalism', 'film', 'advertising', 'public relations'],
+            'org_coed':  ['organization', 'organizations', 'coed', 'education', 'teaching', 'library', 'early childhood'],
+            'org_cal':   ['organization', 'organizations', 'cal', 'arts', 'letters', 'literature', 'filipino', 'english', 'philosophy', 'theater'],
+            'org_cs':    ['organization', 'organizations', 'cs', 'science', 'chemistry', 'biology', 'physics', 'mathematics', 'statistics', 'nutrition', 'food technology'],
+            'org_cssd':  ['organization', 'organizations', 'cssd', 'social sciences', 'sociology', 'psychology', 'economics', 'history', 'philippine studies', 'social work'],
+            'org_cpspa': ['organization', 'organizations', 'cpspa', 'political science', 'public administration', 'international studies'],
+            'org_cthtm': ['organization', 'organizations', 'cthtm', 'tourism', 'hospitality', 'transportation', 'culinary'],
+            'org_chk':   ['organization', 'organizations','chk', 'human kinetics', 'physical education', 'sports', 'exercise', 'health'],
+            'college':   ['college', 'colleges'],
+            'campus':    ['campus', 'branch', 'branches'],
+            'student_council': ['student council', 'sc', 'council', 'student government'],
+        },
+        
+        matchesCategory(link, q) {
+            const keywords = this.categoryKeywords[link.category] ?? [];
+            return keywords.some(k => k.includes(q) || q.includes(k));
+        },
 
         get results() {
             if (this.search.trim() === '') return [];
-            const q = this.search.toLowerCase();
-            return this.allLinks.filter(link =>
-                link.title?.toLowerCase().includes(q) ||
-                link.description?.toLowerCase().includes(q) ||
-                link.type?.toLowerCase() === q
-            );
+
+            const q = this.search.toLowerCase().trim();
+
+            return this.allLinks
+                .map(link => {
+                    const title = link.title?.toLowerCase() ?? '';
+                    const desc = link.description?.toLowerCase() ?? '';
+                    const type = link.type?.toLowerCase() ?? '';
+
+                    let score = -1;
+
+                    if (title === q) {
+                        score = 100;
+                    } else if (title.startsWith(q)) {
+                        score = 90;
+                    } else if (title.split(/\s+/).some(word => word.startsWith(q))) {
+                        score = 80;
+                    } else if (title.includes(q)) {
+                        score = 70;
+                    } else if (desc === q) {
+                        score = 60;
+                    } else if (desc.startsWith(q)) {
+                        score = 50;
+                    } else if (desc.split(/\s+/).some(word => word.startsWith(q))) {
+                        score = 40;
+                    } else if (desc.includes(q)) {
+                        score = 30;
+                    } else if (type === q) {
+                        score = 20;
+                    } else if (this.matchesCategory(link, q)) {
+                        score = 10;
+                    }
+
+                    return { ...link, _score: score };
+                })
+                .filter(link => link._score >= 0)
+                .sort((a, b) => {
+                    if (b._score !== a._score) return b._score - a._score;
+
+                    const aTitle = a.title?.toLowerCase() ?? '';
+                    const bTitle = b.title?.toLowerCase() ?? '';
+
+                    return aTitle.localeCompare(bTitle);
+                });
         },
 
         get suggestions() {
-            if (this.search.trim().length < 2) return [];
+            if (this.search.trim().length < 1) return [];
             const q = this.search.toLowerCase();
+
             return this.allLinks
                 .filter(link =>
                     link.title?.toLowerCase().includes(q) ||
-                    link.description?.toLowerCase().includes(q)
+                    link.description?.toLowerCase().includes(q) ||
+                    this.matchesCategory(link, q)
                 )
-                .slice(0, 6); // limit to 6 suggestions
-        },
+                .map(link => {
+                    const title = link.title?.toLowerCase() ?? '';
+                    const desc = link.description?.toLowerCase() ?? '';
+                    let score = 0;
 
+                    if (title === q)                          score = 10;
+                    else if (title.startsWith(q))             score = 8;
+                    else if (title.includes(' ' + q))         score = 6;
+                    else if (title.includes(q))               score = 4;
+                    else if (desc === q)                      score = 3;
+                    else if (desc.startsWith(q))              score = 2;
+                    else if (desc.includes(q))                score = 1;
+                    else if (this.matchesCategory(link, q))   score = 0;
+
+                    return { ...link, _score: score };
+                })
+                .sort((a, b) => b._score - a._score)
+                .slice(0, 6);
+        },
 
         get groupedResults() {
             const order = ['file', 'website', 'facebook_page', 'community', 'subreddit'];
@@ -129,27 +220,52 @@ new class extends Component
             this.activeSection = section;
         },
 
+        scrollToSection(section) {
+            const el = document.getElementById(section);
+            if (!el) return;
+
+            const y = el.getBoundingClientRect().top + window.pageYOffset - 110;
+
+            window.scrollTo({
+                top: y,
+                behavior: 'smooth'
+            });
+
+            this.activeSection = section;
+            history.replaceState(null, '', section === 'home' ? window.location.pathname : `#${section}`);
+        },
+
         updateActiveSection() {
             this.showStickySearch = window.scrollY > 320;
 
-            const sections = document.querySelectorAll('section[id]');
+            const sections = [...document.querySelectorAll('section[id]')]
+                .filter(section => section.offsetParent !== null); // only visible sections
+
             let current = 'home';
+            let closestTop = Infinity;
 
             sections.forEach(section => {
                 const rect = section.getBoundingClientRect();
-                if (rect.top <= 140) {
+                const distance = Math.abs(rect.top - 140);
+
+                if (rect.top <= 180 && distance < closestTop) {
+                    closestTop = distance;
                     current = section.id;
                 }
             });
 
-            const nearBottom =
-                window.innerHeight + window.scrollY >= document.body.offsetHeight - 10;
-
-            if (nearBottom) {
-                current = 'about';
+            if (window.scrollY < 120) {
+                current = 'home';
             }
 
+            const atBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 10;
+
+            if (atBottom) {
+                current = 'about';
+            }
             this.activeSection = current;
+
+            history.replaceState(null, '', current === 'home' ? window.location.pathname : `#${current}`);
         }
     }"
     x-init="
@@ -165,21 +281,32 @@ new class extends Component
         <a href="#home" class="font-bold whitespace-nowrap">ONE PUP</a>
 
         <nav class="hidden md:flex gap-4 text-sm">
-            <a href="#home" @click="setActive('home'); search = ''" :class="activeSection === 'home' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Home</a>
-            <a href="#files" @click="setActive('files'); search = ''" :class="activeSection === 'files' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Files</a>
-            <a href="#websites" @click="setActive('websites'); search = ''" :class="activeSection === 'websites' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Websites</a>
-            <a href="#facebook-pages" @click="setActive('facebook-pages'); search = ''" :class="activeSection === 'facebook-pages' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Pages</a>
-            <a href="#communities" @click="setActive('communities'); search = ''" :class="activeSection === 'communities' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Communities</a>
-             <a href="#subreddits" @click="setActive('subreddits'); search = ''" :class="activeSection === 'subreddits' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Subreddits</a>
-             <a href="#suggest" @click="setActive('suggest'); search = ''" :class="activeSection === 'suggest' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Contribute</a>
-             <a href="#about" @click="setActive('about'); search = ''" :class="activeSection === 'about' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">About</a>
+            <a href="#" @click.prevent="search = ''; scrollToSection('home');" :class="activeSection === 'home' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Home</a>
+            <a href="#" @click.prevent="search = ''; scrollToSection('files');" :class="activeSection === 'files' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Files</a>
+            <a href="#" @click.prevent="search = ''; scrollToSection('websites');" :class="activeSection === 'websites' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Websites</a>
+            <a href="#" @click.prevent="search = ''; scrollToSection('facebook-pages');" :class="activeSection === 'facebook-pages' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Pages</a>
+            <a href="#" @click.prevent="search = ''; scrollToSection('communities');" :class="activeSection === 'communities' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Communities</a>
+             <a href="#" @click.prevent="search = ''; scrollToSection('subreddits');" :class="activeSection === 'subreddits' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Subreddits</a>
+             <a href="#" @click.prevent="search = ''; scrollToSection('suggest');" :class="activeSection === 'suggest' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Contribute</a>
+             <a href="#" @click.prevent="search = ''; scrollToSection('about');" :class="activeSection === 'about' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">About</a>
         </nav>
 
         <div x-show="showStickySearch" x-transition class="relative">
             <input
                 type="text"
-                x-model="search"
-                @input="showDropdown = true; highlightedIndex = -1"
+                :value="rawSearch"
+                @input="
+                    $el.value = $event.target.value;
+                    rawSearch = $event.target.value;
+                    showDropdown = true;
+                    highlightedIndex = -1;
+                    clearTimeout(searchTimeout);
+                    if (rawSearch.trim() === '') {
+                        search = '';           // clear immediately
+                    } else {
+                        searchTimeout = setTimeout(() => { search = rawSearch; }, 300);
+                    }
+                "
                 @focus="showDropdown = true"
                 @blur="setTimeout(() => showDropdown = false, 150)"
                 @keydown.arrow-down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1)"
@@ -187,8 +314,8 @@ new class extends Component
                 @keydown.enter.prevent="
                     if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
                         search = suggestions[highlightedIndex].title;
-                        showDropdown = false;
                     }
+                    showDropdown = false;
                 "
                 @keydown.escape="showDropdown = false"
                 placeholder="Looking for something?"
@@ -210,7 +337,13 @@ new class extends Component
                             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
                             </svg>
-                            <span class="truncate font-medium" x-text="suggestion.title"></span>
+                            <div class="min-w-0">
+                                <div class="truncate font-medium" x-text="suggestion.title"></div>
+                                <div
+                                    class="truncate text-xs mt-0.5 opacity-60"
+                                    x-text="suggestion.description ? (suggestion.description.length > 60 ? suggestion.description.slice(0, 60) + '...' : suggestion.description) : ''"
+                                ></div>
+                            </div>
                         </div>
                         <span
                             :class="highlightedIndex === index ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'"
@@ -247,8 +380,19 @@ A centralized website where every essential PUP link is accessible in one place.
     <div class="rounded-full bg-white/85 p-2 shadow-2xl backdrop-blur-xl">
         <input
             type="text"
-            x-model="search"
-            @input="showDropdown = true; highlightedIndex = -1"
+            :value="rawSearch"
+            @input="
+                $el.value = $event.target.value;
+                rawSearch = $event.target.value;
+                showDropdown = true;
+                highlightedIndex = -1;
+                clearTimeout(searchTimeout);
+                if (rawSearch.trim() === '') {
+                    search = '';           // clear immediately
+                } else {
+                    searchTimeout = setTimeout(() => { search = rawSearch; }, 300);
+                }
+            "
             @focus="showDropdown = true"
             @blur="setTimeout(() => showDropdown = false, 150)"
             @keydown.arrow-down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1)"
@@ -256,8 +400,8 @@ A centralized website where every essential PUP link is accessible in one place.
             @keydown.enter.prevent="
                 if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
                     search = suggestions[highlightedIndex].title;
-                    showDropdown = false;
                 }
+                showDropdown = false;
             "
             @keydown.escape="showDropdown = false"
             placeholder="Looking for something?"
@@ -266,7 +410,7 @@ A centralized website where every essential PUP link is accessible in one place.
     </div>
 
     <div
-        x-show="showDropdown && suggestions.length > 0"
+        x-show="showDropdown && suggestions.length > 0 && !showStickySearch"
         x-cloak
         class="absolute left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-y-auto max-h-72 z-50"
     >
@@ -280,7 +424,13 @@ A centralized website where every essential PUP link is accessible in one place.
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
                     </svg>
-                    <span class="truncate font-medium" x-text="suggestion.title"></span>
+                    <div class="min-w-0 text-left">
+                        <div class="truncate font-medium" x-text="suggestion.title"></div>
+                        <div
+                            class="truncate text-xs mt-0.5 opacity-60"
+                            x-text="suggestion.description ? (suggestion.description.length > 60 ? suggestion.description.slice(0, 60) + '...' : suggestion.description) : ''"
+                        ></div>
+                    </div>
                 </div>
                 <span
                     :class="highlightedIndex === index ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'"
@@ -307,16 +457,14 @@ Suggestions, errors, or missing links?
     <section class="scroll-mt-28 mx-auto max-w-7xl px-6 py-1">
 
         <h2 class="text-center text-4xl font-display font-black text-[#800000] mb-6">
-            Search Results
+            Search results for "<span x-text="search"></span>"
         </h2>
 
-        {{-- No results --}}
         <div x-show="results.length === 0" class="text-center py-12">
-            <img src="/images/no-results.gif" class="mx-auto w-72 mb-6">
-            <p class="text-xl text-gray-600 font-semibold">No results found</p>
+            <img src="/images/no-results.gif" class="mx-auto w-72 mb-6" alt="I'm sorry, I don't have that :< maybe you could raise it to me?">
+            <p class="text-xl text-gray-600 font-semibold">No results found for "<span x-text="search"></span>"</p>
         </div>
 
-        {{-- Results: render ALL cards up front, hide non-matching ones via Alpine --}}
         <div x-show="results.length > 0">
             @foreach(['file' => 'Files', 'website' => 'Websites', 'facebook_page' => 'Facebook Pages', 'community' => 'Communities', 'subreddit' => 'Subreddits'] as $type => $label)
                 @php
@@ -332,8 +480,6 @@ Suggestions, errors, or missing links?
                     <h2 class="mb-8 text-center font-display text-4xl font-black text-[#800000]">
                         {{ $label }}
                     </h2>
-
-                    {{-- Official group --}}
                     @if($official->count())
                         <div x-show="results.some(r => r.type === '{{ $type }}' && r.is_official)">
                             <div class="mb-12">
@@ -377,7 +523,6 @@ Suggestions, errors, or missing links?
                         </div>
                     @endif
 
-                    {{-- Unofficial group --}}
                     @if($unofficial->count())
                         <div x-show="results.some(r => r.type === '{{ $type }}' && !r.is_official)">
                             <div class="mb-12">

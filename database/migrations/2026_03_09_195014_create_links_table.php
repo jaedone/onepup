@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('url');
             $table->enum('type', ['file', 'website', 'facebook_page', 'community', 'subreddit']);
             $table->boolean('is_official')->default(true);
-            $table->integer('sort_order')->default(0);
+            $table->string('category')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

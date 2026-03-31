@@ -11,8 +11,8 @@ class Link extends Model
         'description',
         'url',
         'type',
+        'category',
         'is_official',
-        'sort_order',
         'is_active',
     ];
 }
