@@ -314,6 +314,7 @@ new class extends Component
                 @keydown.enter.prevent="
                     if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
                         search = suggestions[highlightedIndex].title;
+                        rawSearch = suggestions[highlightedIndex].title;
                     }
                     showDropdown = false;
                 "
@@ -329,7 +330,7 @@ new class extends Component
             >
                 <template x-for="(suggestion, index) in suggestions" :key="suggestion.id">
                     <div
-                        @mousedown.prevent="search = suggestion.title; showDropdown = false"
+                        @mousedown.prevent="search = suggestion.title; rawSearch = suggestion.title; showDropdown = false"
                         :class="highlightedIndex === index ? 'bg-[#800000] text-white' : 'hover:bg-neutral-100 text-black'"
                         class="flex items-center justify-between px-5 py-3 cursor-pointer transition"
                     >
@@ -400,6 +401,7 @@ A centralized website where every essential PUP link is accessible in one place.
             @keydown.enter.prevent="
                 if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
                     search = suggestions[highlightedIndex].title;
+                    rawSearch = suggestions[highlightedIndex].title;
                 }
                 showDropdown = false;
             "
@@ -416,7 +418,7 @@ A centralized website where every essential PUP link is accessible in one place.
     >
         <template x-for="(suggestion, index) in suggestions" :key="suggestion.id">
             <div
-                @mousedown.prevent="search = suggestion.title; showDropdown = false"
+                @mousedown.prevent="search = suggestion.title; rawSearch = suggestion.title; showDropdown = false"
                 :class="highlightedIndex === index ? 'bg-[#800000] text-white' : 'hover:bg-neutral-100 text-black'"
                 class="flex items-center justify-between px-5 py-3 cursor-pointer transition"
             >
