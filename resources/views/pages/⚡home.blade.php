@@ -71,19 +71,6 @@ new class extends Component
             ->values()
             ->groupBy(['type', 'category']);
     }
-    // public function getLinkStatsProperty()
-    // {
-    //     return Link::where('is_active', true)
-    //         ->selectRaw("
-    //             COUNT(*) as total,
-    //             SUM(CASE WHEN type = 'file' THEN 1 ELSE 0 END) as files,
-    //             SUM(CASE WHEN type = 'website' THEN 1 ELSE 0 END) as websites,
-    //             SUM(CASE WHEN type = 'facebook_page' THEN 1 ELSE 0 END) as pages,
-    //             SUM(CASE WHEN type = 'community' THEN 1 ELSE 0 END) as communities,
-    //             SUM(CASE WHEN type = 'subreddit' THEN 1 ELSE 0 END) as subreddits
-    //         ")
-    //         ->first();
-    // }
 
 };
 ?>
@@ -93,11 +80,12 @@ new class extends Component
         showStickySearch: false,
         activeSection: 'home',
         search: '',
-        allLinks: {{ Js::from($this->searchableLinks) }},
-        showDropdown: false,
-        highlightedIndex: -1,
-        searchTimeout: null,
-        rawSearch: '',
+        allLinks: {{ Js::from($this->searchableLinks) }}.map(link => ({
+            ...link,
+            _title: (link.title || '').toLowerCase(),
+            _desc: (link.description || '').toLowerCase(),
+            _type: (link.type || '').toLowerCase(),
+        })),
 
         categoryKeywords: {
             'org_cadbe': ['organization', 'organizations', 'cadbe', 'architecture', 'design', 'built environment', 'interior design', 'environmental planning'],
@@ -124,35 +112,30 @@ new class extends Component
         },
 
         get results() {
-            if (this.search.trim() === '') return [];
-
             const q = this.search.toLowerCase().trim();
+            if (!q) return [];
 
             return this.allLinks
                 .map(link => {
-                    const title = link.title?.toLowerCase() ?? '';
-                    const desc = link.description?.toLowerCase() ?? '';
-                    const type = link.type?.toLowerCase() ?? '';
-
                     let score = -1;
 
-                    if (title === q) {
+                    if (link._title === q) {
                         score = 100;
-                    } else if (title.startsWith(q)) {
+                    } else if (link._title.startsWith(q)) {
                         score = 90;
-                    } else if (title.split(/\s+/).some(word => word.startsWith(q))) {
+                    } else if (link._title.split(/\s+/).some(word => word.startsWith(q))) {
                         score = 80;
-                    } else if (title.includes(q)) {
+                    } else if (link._title.includes(q)) {
                         score = 70;
-                    } else if (desc === q) {
+                    } else if (link._desc === q) {
                         score = 60;
-                    } else if (desc.startsWith(q)) {
+                    } else if (link._desc.startsWith(q)) {
                         score = 50;
-                    } else if (desc.split(/\s+/).some(word => word.startsWith(q))) {
+                    } else if (link._desc.split(/\s+/).some(word => word.startsWith(q))) {
                         score = 40;
-                    } else if (desc.includes(q)) {
+                    } else if (link._desc.includes(q)) {
                         score = 30;
-                    } else if (type === q) {
+                    } else if (link._type === q) {
                         score = 20;
                     } else if (this.matchesCategory(link, q)) {
                         score = 10;
@@ -163,57 +146,19 @@ new class extends Component
                 .filter(link => link._score >= 0)
                 .sort((a, b) => {
                     if (b._score !== a._score) return b._score - a._score;
-
-                    const aTitle = a.title?.toLowerCase() ?? '';
-                    const bTitle = b.title?.toLowerCase() ?? '';
-
-                    return aTitle.localeCompare(bTitle);
-                });
-        },
-
-        get suggestions() {
-            if (this.search.trim().length < 1) return [];
-            const q = this.search.toLowerCase();
-
-            return this.allLinks
-                .filter(link =>
-                    link.title?.toLowerCase().includes(q) ||
-                    link.description?.toLowerCase().includes(q) ||
-                    this.matchesCategory(link, q)
-                )
-                .map(link => {
-                    const title = link.title?.toLowerCase() ?? '';
-                    const desc = link.description?.toLowerCase() ?? '';
-                    let score = 0;
-
-                    if (title === q)                          score = 10;
-                    else if (title.startsWith(q))             score = 8;
-                    else if (title.includes(' ' + q))         score = 6;
-                    else if (title.includes(q))               score = 4;
-                    else if (desc === q)                      score = 3;
-                    else if (desc.startsWith(q))              score = 2;
-                    else if (desc.includes(q))                score = 1;
-                    else if (this.matchesCategory(link, q))   score = 0;
-
-                    return { ...link, _score: score };
+                    return a._title.localeCompare(b._title);
                 })
-                .sort((a, b) => b._score - a._score)
-                .slice(0, 6);
+                .slice(0, 30);
         },
 
         get groupedResults() {
-            const order = ['file', 'website', 'facebook_page', 'community', 'subreddit'];
-            return order
-                .map(type => ({
-                    type,
-                    label: { file:'Files', website:'Websites', facebook_page:'Facebook Pages', community:'Communities', subreddit:'Subreddits' }[type],
-                    items: this.results.filter(l => l.type === type)
-                }))
-                .filter(g => g.items.length > 0);
-        },
-
-        typeLabel(type) {
-            return { file:'File', website:'Website', facebook_page:'Page', community:'Community', subreddit:'Subreddit' }[type] ?? type;
+            return {
+                file: this.results.filter(link => link.type === 'file'),
+                website: this.results.filter(link => link.type === 'website'),
+                facebook_page: this.results.filter(link => link.type === 'facebook_page'),
+                community: this.results.filter(link => link.type === 'community'),
+                subreddit: this.results.filter(link => link.type === 'subreddit'),
+            };
         },
 
         setActive(section) {
@@ -294,66 +239,10 @@ new class extends Component
         <div x-show="showStickySearch" x-transition class="relative">
             <input
                 type="text"
-                :value="rawSearch"
-                @input="
-                    $el.value = $event.target.value;
-                    rawSearch = $event.target.value;
-                    showDropdown = true;
-                    highlightedIndex = -1;
-                    clearTimeout(searchTimeout);
-                    if (rawSearch.trim() === '') {
-                        search = '';           // clear immediately
-                    } else {
-                        searchTimeout = setTimeout(() => { search = rawSearch; }, 300);
-                    }
-                "
-                @focus="showDropdown = true"
-                @blur="setTimeout(() => showDropdown = false, 150)"
-                @keydown.arrow-down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1)"
-                @keydown.arrow-up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, -1)"
-                @keydown.enter.prevent="
-                    if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
-                        search = suggestions[highlightedIndex].title;
-                        rawSearch = suggestions[highlightedIndex].title;
-                    }
-                    showDropdown = false;
-                "
-                @keydown.escape="showDropdown = false"
+                x-model.debounce.200ms="search"
                 placeholder="Looking for something?"
-                class="ml-4 rounded-full bg-white/90 px-4 py-2 text-sm text-black outline-none w-72"
+                class="ml-4 rounded-full bg-white/90 px-4 py-2 text-sm text-black outline-none w-72 border-2 border-[#DAA520] focus-within:ring-2 focus-within:ring-[#DAA520]/40"
             >
-
-            <div
-                x-show="showDropdown && suggestions.length > 0"
-                x-cloak
-                class="absolute left-4 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-y-auto max-h-72 z-50 w-96"
-            >
-                <template x-for="(suggestion, index) in suggestions" :key="suggestion.id">
-                    <div
-                        @mousedown.prevent="search = suggestion.title; rawSearch = suggestion.title; showDropdown = false"
-                        :class="highlightedIndex === index ? 'bg-[#800000] text-white' : 'hover:bg-neutral-100 text-black'"
-                        class="flex items-center justify-between px-5 py-3 cursor-pointer transition"
-                    >
-                        <div class="flex items-center gap-3 min-w-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-                            </svg>
-                            <div class="min-w-0">
-                                <div class="truncate font-medium" x-text="suggestion.title"></div>
-                                <div
-                                    class="truncate text-xs mt-0.5 opacity-60"
-                                    x-text="suggestion.description ? (suggestion.description.length > 60 ? suggestion.description.slice(0, 60) + '...' : suggestion.description) : ''"
-                                ></div>
-                            </div>
-                        </div>
-                        <span
-                            :class="highlightedIndex === index ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'"
-                            class="text-xs px-2 py-1 rounded ml-3 shrink-0"
-                            x-text="{ file:'File', website:'Website', facebook_page:'Page', community:'Community', subreddit:'Subreddit' }[suggestion.type] ?? suggestion.type"
-                        ></span>
-                    </div>
-                </template>
-            </div>
         </div>
 
     </div>
@@ -377,71 +266,14 @@ A centralized website where every essential PUP link is accessible in one place.
 
 <div class="mx-auto max-w-3xl">
 
-<div class="mx-auto max-w-3xl relative">
-    <div class="rounded-full bg-white/85 p-2 shadow-2xl backdrop-blur-xl">
-        <input
-            type="text"
-            :value="rawSearch"
-            @input="
-                $el.value = $event.target.value;
-                rawSearch = $event.target.value;
-                showDropdown = true;
-                highlightedIndex = -1;
-                clearTimeout(searchTimeout);
-                if (rawSearch.trim() === '') {
-                    search = '';           // clear immediately
-                } else {
-                    searchTimeout = setTimeout(() => { search = rawSearch; }, 300);
-                }
-            "
-            @focus="showDropdown = true"
-            @blur="setTimeout(() => showDropdown = false, 150)"
-            @keydown.arrow-down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1)"
-            @keydown.arrow-up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, -1)"
-            @keydown.enter.prevent="
-                if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
-                    search = suggestions[highlightedIndex].title;
-                    rawSearch = suggestions[highlightedIndex].title;
-                }
-                showDropdown = false;
-            "
-            @keydown.escape="showDropdown = false"
-            placeholder="Looking for something?"
-            class="w-full rounded-full bg-transparent px-6 py-2 text-lg text-black outline-none"
-        >
-    </div>
-
-    <div
-        x-show="showDropdown && suggestions.length > 0 && !showStickySearch"
-        x-cloak
-        class="absolute left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-y-auto max-h-72 z-50"
-    >
-        <template x-for="(suggestion, index) in suggestions" :key="suggestion.id">
-            <div
-                @mousedown.prevent="search = suggestion.title; rawSearch = suggestion.title; showDropdown = false"
-                :class="highlightedIndex === index ? 'bg-[#800000] text-white' : 'hover:bg-neutral-100 text-black'"
-                class="flex items-center justify-between px-5 py-3 cursor-pointer transition"
-            >
-                <div class="flex items-center gap-3 min-w-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-                    </svg>
-                    <div class="min-w-0 text-left">
-                        <div class="truncate font-medium" x-text="suggestion.title"></div>
-                        <div
-                            class="truncate text-xs mt-0.5 opacity-60"
-                            x-text="suggestion.description ? (suggestion.description.length > 60 ? suggestion.description.slice(0, 60) + '...' : suggestion.description) : ''"
-                        ></div>
-                    </div>
-                </div>
-                <span
-                    :class="highlightedIndex === index ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'"
-                    class="text-xs px-2 py-1 rounded ml-3 shrink-0"
-                    x-text="{ file:'File', website:'Website', facebook_page:'Page', community:'Community', subreddit:'Subreddit' }[suggestion.type] ?? suggestion.type"
-                ></span>
-            </div>
-        </template>
-    </div>
+<div class="flex items-center rounded-full bg-white/80 px-6 py-4 shadow-2xl backdrop-blur-xl gap-2 border-6 border-[#DAA520] focus-within:ring-2 focus-within:ring-[#DAA520]/40">
+    <input
+        type="text"
+        x-model="search"
+        @keydown.enter="search = $event.target.value"
+        placeholder="Looking for something?"
+        class="flex-1 bg-transparent text-base text-black outline-none"
+    />
 </div>
 
 </div>
@@ -457,121 +289,140 @@ Suggestions, errors, or missing links?
 
 <div x-show="search.trim() !== ''" x-cloak>
     <section class="scroll-mt-28 mx-auto max-w-7xl px-6 py-1">
-
         <h2 class="text-center text-4xl font-display font-black text-[#800000] mb-6">
             Search results for "<span x-text="search"></span>"
         </h2>
 
         <div x-show="results.length === 0" class="text-center py-12">
-            <img src="/images/no-results.gif" class="mx-auto w-72 mb-6" alt="I'm sorry, I don't have that :< maybe you could raise it to me?">
-            <p class="text-xl text-gray-600 font-semibold">No results found for "<span x-text="search"></span>"</p>
+            <img src="/images/no-results.gif" class="mx-auto w-72 mb-6" alt="No results found">
+            <p class="text-xl text-gray-600 font-semibold">
+                No results found for "<span x-text="search"></span>"
+            </p>
         </div>
 
-        <div x-show="results.length > 0">
-            @foreach(['file' => 'Files', 'website' => 'Websites', 'facebook_page' => 'Facebook Pages', 'community' => 'Communities', 'subreddit' => 'Subreddits'] as $type => $label)
-                @php
-                    $typeLinks = $this->searchableLinks->where('type', $type);
-                    $official = $typeLinks->where('is_official', true)->values();
-                    $unofficial = $typeLinks->where('is_official', false)->values();
-                @endphp
+        <div x-show="results.length > 0" class="space-y-12">
 
-                <div
-                    x-show="results.some(r => r.type === '{{ $type }}')"
-                    class="mb-10"
-                >
-                    <h2 class="mb-8 text-center font-display text-4xl font-black text-[#800000]">
-                        {{ $label }}
-                    </h2>
-                    @if($official->count())
-                        <div x-show="results.some(r => r.type === '{{ $type }}' && r.is_official)">
-                            <div class="mb-12">
-                                <div class="mb-6 flex items-center gap-4">
-                                    <div class="h-px flex-1 bg-[#800000]/30"></div>
-                                    <h3 class="font-display text-2xl font-bold text-[#800000]">Official {{ $label }}</h3>
-                                    <div class="h-px flex-1 bg-[#800000]/30"></div>
+            <template x-if="groupedResults.file.length">
+                <div>
+                    <h2 class="mb-6 text-center font-display text-4xl font-black text-[#800000]">Files</h2>
+                    <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        <template x-for="link in groupedResults.file" :key="link.id">
+                            <a
+                                :href="link.url"
+                                target="_blank"
+                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl"
+                                :class="link.is_official
+                                    ? 'border-[#800000]/40 hover:border-[#800000] hover:bg-[#800000]'
+                                    : 'border-[#DAA520]/60 hover:border-[#DAA520] hover:bg-[#DAA520]'"
+                            >
+                                <div class="mb-2 flex items-start justify-between gap-3">
+                                    <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words" x-text="link.title"></h4>
+                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">File</span>
                                 </div>
-                                <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                                    @foreach($official as $link)
-                                        <div x-show="results.some(r => r.id === {{ $link->id }})" class="contents">
-                                            <a
-                                                href="{{ $link->url }}"
-                                                target="_blank"
-                                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl border-[#800000]/40 hover:border-[#800000] hover:bg-[#800000]"
-                                            >
-                                                <div class="mb-2 flex items-start justify-between gap-3">
-                                                    <div class="flex items-center gap-2">
-                                                        <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words [word-break:break-word]">
-                                                            {{ $link->title }}
-                                                        </h4>
-                                                    </div>
-                                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">
-                                                        {{ match($link->type) {
-                                                            'file' => 'File',
-                                                            'website' => 'Website',
-                                                            'facebook_page' => 'Page',
-                                                            'community' => 'Community',
-                                                            'subreddit' => 'Subreddit'
-                                                        } }}
-                                                    </span>
-                                                </div>
-                                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90">
-                                                    {{ $link->description }}
-                                                </p>
-                                            </a>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            </div>
-                        </div>
-                    @endif
-
-                    @if($unofficial->count())
-                        <div x-show="results.some(r => r.type === '{{ $type }}' && !r.is_official)">
-                            <div class="mb-12">
-                                <div class="mb-6 flex items-center gap-4">
-                                    <div class="h-px flex-1 bg-[#DAA520]/30"></div>
-                                    <h3 class="font-display text-2xl font-bold text-[#800000]">Unofficial {{ $label }}</h3>
-                                    <div class="h-px flex-1 bg-[#DAA520]/30"></div>
-                                </div>
-                                <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                                    @foreach($unofficial as $link)
-                                        <div x-show="results.some(r => r.id === {{ $link->id }})" class="contents">
-                                            <a
-                                                href="{{ $link->url }}"
-                                                target="_blank"
-                                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl border-[#DAA520]/60 hover:border-[#DAA520] hover:bg-[#DAA520]"
-                                            >
-                                                <div class="mb-2 flex items-start justify-between gap-3">
-                                                    <div class="flex items-center gap-2">
-                                                        <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words [word-break:break-word]">
-                                                            {{ $link->title }}
-                                                        </h4>
-                                                    </div>
-                                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">
-                                                        {{ match($link->type) {
-                                                            'file' => 'File',
-                                                            'website' => 'Website',
-                                                            'facebook_page' => 'Page',
-                                                            'community' => 'Community',
-                                                            'subreddit' => 'Subreddit'
-                                                        } }}
-                                                    </span>
-                                                </div>
-                                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90">
-                                                    {{ $link->description }}
-                                                </p>
-                                            </a>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            </div>
-                        </div>
-                    @endif
-
+                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90" x-text="link.description"></p>
+                            </a>
+                        </template>
+                    </div>
                 </div>
-            @endforeach
-        </div>
+            </template>
 
+            <template x-if="groupedResults.website.length">
+                <div>
+                    <h2 class="mb-6 text-center font-display text-4xl font-black text-[#800000]">Websites</h2>
+                    <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        <template x-for="link in groupedResults.website" :key="link.id">
+                            <a
+                                :href="link.url"
+                                target="_blank"
+                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl"
+                                :class="link.is_official
+                                    ? 'border-[#800000]/40 hover:border-[#800000] hover:bg-[#800000]'
+                                    : 'border-[#DAA520]/60 hover:border-[#DAA520] hover:bg-[#DAA520]'"
+                            >
+                                <div class="mb-2 flex items-start justify-between gap-3">
+                                    <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words" x-text="link.title"></h4>
+                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">Website</span>
+                                </div>
+                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90" x-text="link.description"></p>
+                            </a>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="groupedResults.facebook_page.length">
+                <div>
+                    <h2 class="mb-6 text-center font-display text-4xl font-black text-[#800000]">Facebook Pages</h2>
+                    <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        <template x-for="link in groupedResults.facebook_page" :key="link.id">
+                            <a
+                                :href="link.url"
+                                target="_blank"
+                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl"
+                                :class="link.is_official
+                                    ? 'border-[#800000]/40 hover:border-[#800000] hover:bg-[#800000]'
+                                    : 'border-[#DAA520]/60 hover:border-[#DAA520] hover:bg-[#DAA520]'"
+                            >
+                                <div class="mb-2 flex items-start justify-between gap-3">
+                                    <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words" x-text="link.title"></h4>
+                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">Page</span>
+                                </div>
+                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90" x-text="link.description"></p>
+                            </a>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="groupedResults.community.length">
+                <div>
+                    <h2 class="mb-6 text-center font-display text-4xl font-black text-[#800000]">Communities</h2>
+                    <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        <template x-for="link in groupedResults.community" :key="link.id">
+                            <a
+                                :href="link.url"
+                                target="_blank"
+                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl"
+                                :class="link.is_official
+                                    ? 'border-[#800000]/40 hover:border-[#800000] hover:bg-[#800000]'
+                                    : 'border-[#DAA520]/60 hover:border-[#DAA520] hover:bg-[#DAA520]'"
+                            >
+                                <div class="mb-2 flex items-start justify-between gap-3">
+                                    <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words" x-text="link.title"></h4>
+                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">Community</span>
+                                </div>
+                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90" x-text="link.description"></p>
+                            </a>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="groupedResults.subreddit.length">
+                <div>
+                    <h2 class="mb-6 text-center font-display text-4xl font-black text-[#800000]">Subreddits</h2>
+                    <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        <template x-for="link in groupedResults.subreddit" :key="link.id">
+                            <a
+                                :href="link.url"
+                                target="_blank"
+                                class="group relative rounded-[28px] border p-6 shadow-xl bg-white transition hover:-translate-y-1 hover:shadow-2xl"
+                                :class="link.is_official
+                                    ? 'border-[#800000]/40 hover:border-[#800000] hover:bg-[#800000]'
+                                    : 'border-[#DAA520]/60 hover:border-[#DAA520] hover:bg-[#DAA520]'"
+                            >
+                                <div class="mb-2 flex items-start justify-between gap-3">
+                                    <h4 class="text-lg font-bold text-[#800000] group-hover:text-white break-words" x-text="link.title"></h4>
+                                    <span class="text-xs px-2 py-1 rounded bg-gray-200">Subreddit</span>
+                                </div>
+                                <p class="text-sm leading-6 text-neutral-600 group-hover:text-white/90" x-text="link.description"></p>
+                            </a>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+        </div>
     </section>
 </div>
 
