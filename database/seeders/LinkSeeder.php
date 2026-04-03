@@ -50,6 +50,33 @@ class LinkSeeder extends Seeder
                 'is_official'=> true,
                 'is_active'  => true,
             ],
+            [
+                'title'      => 'PUP Calendar',
+                'description'=> 'The official academic calendar for the Polytechnic University of the Philippines.',
+                'url'        => 'https://www.pup.edu.ph/about/calendar',
+                'type'       => 'file',
+                'category'   => 'official',
+                'is_official'=> true,
+                'is_active'  => true,
+            ],
+            [
+                'title'      => 'PUP Maps',
+                'description'=> 'The official maps for the PUP Main Campus.',
+                'url'        => 'https://www.pup.edu.ph/about/maps',
+                'type'       => 'file',
+                'category'   => 'official',
+                'is_official'=> true,
+                'is_active'  => true,
+            ],
+            [
+                'title'      => 'PUP Hymn',
+                'description'=> 'The official hymn of the Polytechnic University of the Philippines.',
+                'url'        => 'https://www.pup.edu.ph/about/hymn',
+                'type'       => 'file',
+                'category'   => 'official',
+                'is_official'=> true,
+                'is_active'  => true,
+            ],
 
             // =========================================================
             // WEBSITES — Official
