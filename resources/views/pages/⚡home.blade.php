@@ -266,7 +266,7 @@ A centralized website where every essential PUP link is accessible in one place.
 
 <div class="mx-auto max-w-3xl">
 
-<div class="flex items-center rounded-full bg-white/80 px-6 py-4 shadow-2xl backdrop-blur-xl gap-2 border-6 border-[#DAA520] focus-within:ring-2 focus-within:ring-[#DAA520]/40">
+<div class="flex items-center rounded-full bg-white/80 px-10 py-4 shadow-2xl backdrop-blur-xl gap-2 border-2 border-[#DAA520] focus-within:ring-2 focus-within:ring-[#DAA520]/40">
     <input
         type="text"
         x-model="search"
