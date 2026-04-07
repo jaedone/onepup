@@ -221,7 +221,11 @@ new class extends Component
 >
 
 <header class="fixed top-4 left-1/2 z-50 -translate-x-1/2">
-    <div class="flex items-center gap-4 rounded-full border border-white/20 bg-[#800000]/100 px-6 py-3 text-white shadow-2xl backdrop-blur-2xl">
+    <div
+        x-data="{ menuOpen: false }"
+        class="relative flex items-center gap-4 rounded-full border border-white/20 bg-[#800000]/100 px-6 py-3 text-white shadow-2xl backdrop-blur-2xl"
+        :class="menuOpen ? 'rounded-3xl' : 'rounded-full'"
+    >
 
         <a href="#home" class="font-bold whitespace-nowrap">ONE PUP</a>
 
@@ -231,9 +235,9 @@ new class extends Component
             <a href="#" @click.prevent="search = ''; scrollToSection('websites');" :class="activeSection === 'websites' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Websites</a>
             <a href="#" @click.prevent="search = ''; scrollToSection('facebook-pages');" :class="activeSection === 'facebook-pages' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Pages</a>
             <a href="#" @click.prevent="search = ''; scrollToSection('communities');" :class="activeSection === 'communities' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Communities</a>
-             <a href="#" @click.prevent="search = ''; scrollToSection('subreddits');" :class="activeSection === 'subreddits' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Subreddits</a>
-             <a href="#" @click.prevent="search = ''; scrollToSection('suggest');" :class="activeSection === 'suggest' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Contribute</a>
-             <a href="#" @click.prevent="search = ''; scrollToSection('about');" :class="activeSection === 'about' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">About</a>
+            <a href="#" @click.prevent="search = ''; scrollToSection('subreddits');" :class="activeSection === 'subreddits' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Subreddits</a>
+            <a href="#" @click.prevent="search = ''; scrollToSection('suggest');" :class="activeSection === 'suggest' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">Contribute</a>
+            <a href="#" @click.prevent="search = ''; scrollToSection('about');" :class="activeSection === 'about' ? 'text-[#FFDF00] font-semibold' : 'transition hover:text-white/80'">About</a>
         </nav>
 
         <div x-show="showStickySearch" x-transition class="relative">
@@ -243,6 +247,40 @@ new class extends Component
                 placeholder="Looking for something?"
                 class="ml-4 rounded-full bg-white/90 px-4 py-2 text-sm text-black outline-none w-72 border-2 border-[#DAA520] focus-within:ring-2 focus-within:ring-[#DAA520]/40"
             >
+        </div>
+
+        <button
+            @click="menuOpen = !menuOpen"
+            class="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5 focus:outline-none"
+            aria-label="Toggle menu"
+        >
+            <span class="block w-5 h-0.5 bg-white transition-all duration-300" :class="menuOpen ? 'rotate-45 translate-y-2' : ''"></span>
+            <span class="block w-5 h-0.5 bg-white transition-all duration-300" :class="menuOpen ? 'opacity-0' : ''"></span>
+            <span class="block w-5 h-0.5 bg-white transition-all duration-300" :class="menuOpen ? '-rotate-45 -translate-y-2' : ''"></span>
+        </button>
+
+        <div
+            x-show="menuOpen"
+            x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 -translate-y-2"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            x-transition:leave="transition ease-in duration-150"
+            x-transition:leave-start="opacity-100 translate-y-0"
+            x-transition:leave-end="opacity-0 -translate-y-2"
+            @click.outside="menuOpen = false"
+            class="md:hidden absolute top-full left-0 right-0 mt-2 bg-[#800000] rounded-2xl shadow-2xl border border-white/10 overflow-hidden"
+            x-cloak
+        >
+            <nav class="flex flex-col text-sm py-2">
+                <a href="#" @click.prevent="search = ''; scrollToSection('home'); menuOpen = false" class="px-6 py-3 hover:bg-white/10 transition" :class="activeSection === 'home' ? 'text-[#FFDF00] font-semibold' : ''">Home</a>
+                <a href="#" @click.prevent="search = ''; scrollToSection('files'); menuOpen = false" class="px-6 py-3 hover:bg-white/10 transition" :class="activeSection === 'files' ? 'text-[#FFDF00] font-semibold' : ''">Files</a>
+                <a href="#" @click.prevent="search = ''; scrollToSection('websites'); menuOpen = false" class="px-6 py-3 hover:bg-white/10 transition" :class="activeSection === 'websites' ? 'text-[#FFDF00] font-semibold' : ''">Websites</a>
+                <a href="#" @click.prevent="search = ''; scrollToSection('facebook-pages'); menuOpen = false" class="px-6 py-3 hover:bg-white/10 transition" :class="activeSection === 'facebook-pages' ? 'text-[#FFDF00] font-semibold' : ''">Pages</a>
+                <a href="#" @click.prevent="search = ''; scrollToSection('communities'); menuOpen = false" class="px-6 py-3 hover:bg-white/10 transition" :class="activeSection === 'communities' ? 'text-[#FFDF00] font-semibold' : ''">Communities</a>
+                <a href="#" @click.prevent="search = ''; scrollToSection('subreddits'); menuOpen = false" class="px-6 py-3 hover:bg-white/10 transition" :class="activeSection === 'subreddits' ? 'text-[#FFDF00] font-semibold' : ''">Subreddits</a>
+                <a href="#" @click.prevent="search = ''; scrollToSection('suggest'); menuOpen = false" class="px-6 py-3 hover:bg-white/10 transition" :class="activeSection === 'suggest' ? 'text-[#FFDF00] font-semibold' : ''">Contribute</a>
+                <a href="#" @click.prevent="search = ''; scrollToSection('about'); menuOpen = false" class="px-6 py-3 hover:bg-white/10 transition" :class="activeSection === 'about' ? 'text-[#FFDF00] font-semibold' : ''">About</a>
+            </nav>
         </div>
 
     </div>
